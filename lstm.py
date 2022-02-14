@@ -1,3 +1,14 @@
+# 生成训练数据
+import torch
+import torchtext
+from torch.utils.data import DataLoader
+from torch.utils.data.dataset import random_split
+from torchtext.data.functional import to_map_style_dataset
+
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+print(torch.cuda.is_available())
+
+train_iter = torchtext.datasets.IMDB(root='./data', split='train')
 # 创建分词器
 tokenizer = torchtext.data.utils.get_tokenizer('basic_english')
 print(tokenizer('here is the an example!'))
@@ -7,19 +18,16 @@ print(tokenizer('here is the an example!'))
 
 # 构建词汇表
 def yield_tokens(data_iter):
+    tokenizer = torchtext.data.utils.get_tokenizer('basic_english')
     for _, text in data_iter:
         yield tokenizer(text)
 
 vocab = torchtext.vocab.build_vocab_from_iterator(yield_tokens(train_iter), specials=["<pad>", "<unk>"])
 vocab.set_default_index(vocab["<unk>"])
-
 print(vocab(tokenizer('here is the an example <pad> <pad>')))
 '''
 输出：[131, 9, 40, 464, 0, 0]
 '''
-
-
-
 # 数据处理pipelines
 text_pipeline = lambda x: vocab(tokenizer(x))
 label_pipeline = lambda x: 1 if x == 'pos' else 0
@@ -33,17 +41,8 @@ print(label_pipeline('neg'))
 输出：0
 '''
 
-
-# 生成训练数据
-import torch
-import torchtext
-from torch.utils.data import DataLoader
-from torch.utils.data.dataset import random_split
-from torchtext.data.functional import to_map_style_dataset
-
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(torch.cuda.is_available())
 def collate_batch(batch):
+
     max_length = 256
     pad = text_pipeline('<pad>')
     label_list, text_list, length_list = [], [], []
@@ -83,7 +82,7 @@ class LSTM(torch.nn.Module):
         
     def forward(self, ids, length):
         embedded = self.dropout(self.embedding(ids))
-        packed_embedded = torch.nn.utils.rnn.pack_padded_sequence(embedded, length, batch_first=True, 
+        packed_embedded = torch.nn.utils.rnn.pack_padded_sequence(embedded, length.to('cpu'), batch_first=True, 
                                                             enforce_sorted=False)
         packed_output, (hidden, cell) = self.lstm(packed_embedded)
         output, output_length = torch.nn.utils.rnn.pad_packed_sequence(packed_output)
